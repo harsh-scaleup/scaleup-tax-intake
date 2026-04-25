@@ -73,6 +73,8 @@ const documentEmail = "harsh@scaleupaccounting.net";
 export default function Page() {
   const [started, setStarted] = useState(false);
   const [step, setStep] = useState(1);
+  const [submitting, setSubmitting] = useState(false);
+  const [submitted, setSubmitted] = useState(false);
 
   const [form, setForm] = useState<FormData>({
     fullName: "",
@@ -90,22 +92,16 @@ export default function Page() {
   });
 
   function updateField(field: keyof FormData, value: string | boolean) {
-    setForm((prev) => ({
-      ...prev,
-      [field]: value,
-    }));
+    setForm((prev) => ({ ...prev, [field]: value }));
   }
 
   function toggleArray(field: "incomeTypes" | "credits" | "specialSituations", value: string) {
     setForm((prev) => {
       const current = prev[field];
       const exists = current.includes(value);
-
       return {
         ...prev,
-        [field]: exists
-          ? current.filter((item) => item !== value)
-          : [...current, value],
+        [field]: exists ? current.filter((item) => item !== value) : [...current, value],
       };
     });
   }
@@ -130,10 +126,7 @@ export default function Page() {
       checklist.add("T4A slips, if applicable");
     }
 
-    if (
-      form.incomeTypes.includes("Student income / tuition") ||
-      form.credits.includes("Tuition / student credits")
-    ) {
+    if (form.incomeTypes.includes("Student income / tuition") || form.credits.includes("Tuition / student credits")) {
       checklist.add("T2202 tuition slip");
       checklist.add("T4A scholarship / grant slip, if applicable");
       checklist.add("Student loan interest statement, if claiming");
@@ -156,9 +149,7 @@ export default function Page() {
 
     if (
       form.incomeTypes.includes("Self-employment / sole proprietor") ||
-      form.incomeTypes.includes(
-        "Delivery / rideshare income (Uber, Lyft, DoorDash, Skip, Instacart, Amazon Flex)"
-      )
+      form.incomeTypes.includes("Delivery / rideshare income (Uber, Lyft, DoorDash, Skip, Instacart, Amazon Flex)")
     ) {
       checklist.add("Business or platform income summary");
       checklist.add("Expense summary by category");
@@ -166,11 +157,7 @@ export default function Page() {
       checklist.add("GST/HST information, if registered");
     }
 
-    if (
-      form.incomeTypes.includes(
-        "Delivery / rideshare income (Uber, Lyft, DoorDash, Skip, Instacart, Amazon Flex)"
-      )
-    ) {
+    if (form.incomeTypes.includes("Delivery / rideshare income (Uber, Lyft, DoorDash, Skip, Instacart, Amazon Flex)")) {
       checklist.add("Platform annual summaries: Uber, Lyft, DoorDash, Skip, Instacart, Amazon Flex, etc.");
       checklist.add("Vehicle total kilometres and business kilometres");
       checklist.add("Vehicle expense summary: gas, insurance, repairs, lease/loan, parking, tolls");
@@ -185,45 +172,49 @@ export default function Page() {
 
     if (form.credits.includes("RRSP contributions")) checklist.add("RRSP contribution receipts");
     if (form.credits.includes("Medical expenses")) checklist.add("Medical expense summary");
-    if (form.credits.includes("Childcare expenses")) {
-      checklist.add("Childcare receipt with provider name, SIN/BN, child name, and amount paid");
-    }
-    if (form.credits.includes("Work-from-home / employment expenses")) {
-      checklist.add("T2200 / T2200S and employment expense summary");
-    }
+    if (form.credits.includes("Childcare expenses")) checklist.add("Childcare receipt with provider name, SIN/BN, child name, and amount paid");
+    if (form.credits.includes("Work-from-home / employment expenses")) checklist.add("T2200 / T2200S and employment expense summary");
     if (form.credits.includes("Charitable donations")) checklist.add("Official donation receipts");
-    if (form.credits.includes("Union / professional dues")) {
-      checklist.add("Union or professional dues receipt, if not shown on T4");
-    }
+    if (form.credits.includes("Union / professional dues")) checklist.add("Union or professional dues receipt, if not shown on T4");
     if (form.credits.includes("Student loan interest")) checklist.add("Student loan interest statement");
-    if (form.credits.includes("Moving expenses")) {
-      checklist.add("Moving receipts, old/new address proof, employer/school details, and proof of 40km move");
-    }
-    if (form.credits.includes("Disability tax credit")) {
-      checklist.add("DTC approval letter or CRA confirmation");
-    }
-    if (form.credits.includes("First-time home buyer")) {
-      checklist.add("Home purchase closing statement and purchase date");
-    }
+    if (form.credits.includes("Moving expenses")) checklist.add("Moving receipts, old/new address proof, employer/school details, and proof of 40km move");
+    if (form.credits.includes("Disability tax credit")) checklist.add("DTC approval letter or CRA confirmation");
+    if (form.credits.includes("First-time home buyer")) checklist.add("Home purchase closing statement and purchase date");
 
-    if (form.specialSituations.includes("CRA notice / review / audit")) {
-      checklist.add("CRA notice / review / audit letter");
-    }
-    if (form.specialSituations.includes("Unfiled prior years")) {
-      checklist.add("List of unfiled years and available slips");
-    }
-    if (form.specialSituations.includes("Sold property")) {
-      checklist.add("Property purchase/sale documents and principal residence details");
-    }
-    if (form.specialSituations.includes("New to Canada / left Canada")) {
-      checklist.add("Date entered/left Canada and foreign income details");
-    }
+    if (form.specialSituations.includes("CRA notice / review / audit")) checklist.add("CRA notice / review / audit letter");
+    if (form.specialSituations.includes("Unfiled prior years")) checklist.add("List of unfiled years and available slips");
+    if (form.specialSituations.includes("Sold property")) checklist.add("Property purchase/sale documents and principal residence details");
+    if (form.specialSituations.includes("New to Canada / left Canada")) checklist.add("Date entered/left Canada and foreign income details");
 
     return {
       manualReview,
       checklist: Array.from(checklist),
     };
   }, [form]);
+
+  async function submitIntake(openCalendly: boolean) {
+    setSubmitting(true);
+
+    try {
+      await fetch("/api/send-email", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ...form,
+          checklist: result.checklist,
+          manualReview: result.manualReview,
+        }),
+      });
+
+      setSubmitted(true);
+
+      if (openCalendly) {
+        window.open(calendlyLink, "_blank");
+      }
+    } finally {
+      setSubmitting(false);
+    }
+  }
 
   if (!started) {
     return (
@@ -298,10 +289,7 @@ export default function Page() {
           </div>
 
           <div className="mb-6 h-2 rounded-full bg-slate-100">
-            <div
-              className="h-2 rounded-full bg-[#3478f6] transition-all"
-              style={{ width: `${(step / 5) * 100}%` }}
-            />
+            <div className="h-2 rounded-full bg-[#3478f6] transition-all" style={{ width: `${(step / 5) * 100}%` }} />
           </div>
 
           <StepHeading step={step} />
@@ -328,35 +316,16 @@ export default function Page() {
         )}
 
         {step === 2 && (
-          <OptionList
-            options={incomeOptions}
-            selected={form.incomeTypes}
-            color="blue"
-            onToggle={(option) => toggleArray("incomeTypes", option)}
-            buttonText="Continue →"
-            onContinue={() => setStep(3)}
-          />
+          <OptionList options={incomeOptions} selected={form.incomeTypes} color="blue" onToggle={(option) => toggleArray("incomeTypes", option)} buttonText="Continue →" onContinue={() => setStep(3)} />
         )}
 
         {step === 3 && (
-          <OptionList
-            options={creditOptions}
-            selected={form.credits}
-            color="green"
-            onToggle={(option) => toggleArray("credits", option)}
-            buttonText="Continue →"
-            onContinue={() => setStep(4)}
-          />
+          <OptionList options={creditOptions} selected={form.credits} color="green" onToggle={(option) => toggleArray("credits", option)} buttonText="Continue →" onContinue={() => setStep(4)} />
         )}
 
         {step === 4 && (
           <div className="grid gap-5">
-            <OptionButtons
-              options={specialOptions}
-              selected={form.specialSituations}
-              color="amber"
-              onToggle={(option) => toggleArray("specialSituations", option)}
-            />
+            <OptionButtons options={specialOptions} selected={form.specialSituations} color="amber" onToggle={(option) => toggleArray("specialSituations", option)} />
 
             <label className="block">
               <span className="mb-2 block text-sm font-semibold text-slate-700">
@@ -371,28 +340,24 @@ export default function Page() {
             </label>
 
             <label className="flex gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm leading-6 text-slate-700">
-              <input
-                type="checkbox"
-                checked={form.consent}
-                onChange={(e) => updateField("consent", e.target.checked)}
-                className="mt-1"
-              />
+              <input type="checkbox" checked={form.consent} onChange={(e) => updateField("consent", e.target.checked)} className="mt-1" />
               <span>
-                I understand this is an intake request and not tax advice until ScaleUp
-                Accounting reviews my information.
+                I understand this is an intake request and not tax advice until ScaleUp Accounting reviews my information.
               </span>
             </label>
 
-            <NavButton
-              text="View Next Steps →"
-              disabled={!form.consent}
-              onClick={() => setStep(5)}
-            />
+            <NavButton text="View Next Steps →" disabled={!form.consent} onClick={() => setStep(5)} />
           </div>
         )}
 
         {step === 5 && (
           <div className="grid gap-6">
+            {submitted && (
+              <div className="rounded-2xl border border-emerald-200 bg-[#e9f7ef] p-4 text-sm text-emerald-900">
+                Intake submitted successfully. ScaleUp Accounting has received your details.
+              </div>
+            )}
+
             {result.manualReview ? (
               <div className="rounded-2xl border border-amber-200 bg-amber-50 p-5 text-sm leading-6 text-amber-900">
                 Thanks — based on your selections, your return may require a custom review.
@@ -425,21 +390,31 @@ export default function Page() {
             </div>
 
             {!result.manualReview ? (
-              <a
-                href={calendlyLink}
-                target="_blank"
-                rel="noreferrer"
-                className="rounded-xl bg-[#3478f6] px-6 py-4 text-center font-semibold text-white hover:bg-[#2563eb]"
+              <button
+                type="button"
+                onClick={() => submitIntake(true)}
+                disabled={submitting}
+                className="rounded-xl bg-[#3478f6] px-6 py-4 text-center font-semibold text-white hover:bg-[#2563eb] disabled:opacity-50"
               >
-                Book Tax Discovery Call →
-              </a>
-            ) : null}
+                {submitting ? "Submitting..." : "Submit Intake & Book Tax Discovery Call →"}
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => submitIntake(false)}
+                disabled={submitting}
+                className="rounded-xl bg-[#3478f6] px-6 py-4 text-center font-semibold text-white hover:bg-[#2563eb] disabled:opacity-50"
+              >
+                {submitting ? "Submitting..." : "Submit Intake →"}
+              </button>
+            )}
 
             <button
               type="button"
               onClick={() => {
                 setStarted(false);
                 setStep(1);
+                setSubmitted(false);
               }}
               className="rounded-xl border border-slate-200 px-6 py-3 font-semibold text-slate-600"
             >
@@ -454,33 +429,16 @@ export default function Page() {
 
 function StepHeading({ step }: { step: number }) {
   const content: Record<number, { title: string; text: string }> = {
-    1: {
-      title: "Let’s start with the basics",
-      text: "Tell us who you are so ScaleUp Accounting can guide your tax filing properly.",
-    },
-    2: {
-      title: "What income types apply?",
-      text: "Select all that apply. This helps generate your document checklist.",
-    },
-    3: {
-      title: "Which credits or deductions may apply?",
-      text: "Select anything you may want to claim. If unsure, select it and ScaleUp Accounting will review.",
-    },
-    4: {
-      title: "Final details",
-      text: "Select any special situations and add optional notes before viewing next steps.",
-    },
-    5: {
-      title: "Your next steps",
-      text: "Review your document checklist and choose how to proceed.",
-    },
+    1: { title: "Let’s start with the basics", text: "Tell us who you are so ScaleUp Accounting can guide your tax filing properly." },
+    2: { title: "What income types apply?", text: "Select all that apply. This helps generate your document checklist." },
+    3: { title: "Which credits or deductions may apply?", text: "Select anything you may want to claim. If unsure, select it and ScaleUp Accounting will review." },
+    4: { title: "Final details", text: "Select any special situations and add optional notes before viewing next steps." },
+    5: { title: "Your next steps", text: "Review your document checklist and choose how to proceed." },
   };
 
   return (
     <>
-      <h1 className="text-2xl font-semibold text-[#1f2937] md:text-3xl">
-        {content[step].title}
-      </h1>
+      <h1 className="text-2xl font-semibold text-[#1f2937] md:text-3xl">{content[step].title}</h1>
       <p className="mt-2 text-sm text-slate-600">{content[step].text}</p>
     </>
   );
@@ -495,68 +453,22 @@ function InfoCard({ title, text }: { title: string; text: string }) {
   );
 }
 
-function TextInput({
-  placeholder,
-  value,
-  onChange,
-  type = "text",
-}: {
-  placeholder: string;
-  value: string;
-  onChange: (value: string) => void;
-  type?: string;
-}) {
+function TextInput({ placeholder, value, onChange, type = "text" }: { placeholder: string; value: string; onChange: (value: string) => void; type?: string }) {
   return (
-    <input
-      value={value}
-      onChange={(e) => onChange(e.target.value)}
-      placeholder={placeholder}
-      type={type}
-      className="w-full rounded-xl border border-slate-200 px-4 py-3 outline-none focus:border-[#3478f6] focus:ring-2 focus:ring-blue-100"
-    />
+    <input value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} type={type} className="w-full rounded-xl border border-slate-200 px-4 py-3 outline-none focus:border-[#3478f6] focus:ring-2 focus:ring-blue-100" />
   );
 }
 
-function SelectInput({
-  placeholder,
-  value,
-  options,
-  onChange,
-}: {
-  placeholder: string;
-  value: string;
-  options: string[];
-  onChange: (value: string) => void;
-}) {
+function SelectInput({ placeholder, value, options, onChange }: { placeholder: string; value: string; options: string[]; onChange: (value: string) => void }) {
   return (
-    <select
-      value={value}
-      onChange={(e) => onChange(e.target.value)}
-      className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 outline-none focus:border-[#3478f6] focus:ring-2 focus:ring-blue-100"
-    >
+    <select value={value} onChange={(e) => onChange(e.target.value)} className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 outline-none focus:border-[#3478f6] focus:ring-2 focus:ring-blue-100">
       <option value="">{placeholder}</option>
-      {options.map((option) => (
-        <option key={option}>{option}</option>
-      ))}
+      {options.map((option) => <option key={option}>{option}</option>)}
     </select>
   );
 }
 
-function OptionList({
-  options,
-  selected,
-  color,
-  onToggle,
-  buttonText,
-  onContinue,
-}: {
-  options: string[];
-  selected: string[];
-  color: "blue" | "green";
-  onToggle: (value: string) => void;
-  buttonText: string;
-  onContinue: () => void;
-}) {
+function OptionList({ options, selected, color, onToggle, buttonText, onContinue }: { options: string[]; selected: string[]; color: "blue" | "green"; onToggle: (value: string) => void; buttonText: string; onContinue: () => void }) {
   return (
     <div className="grid gap-3">
       <OptionButtons options={options} selected={selected} color={color} onToggle={onToggle} />
@@ -565,22 +477,11 @@ function OptionList({
   );
 }
 
-function OptionButtons({
-  options,
-  selected,
-  color,
-  onToggle,
-}: {
-  options: string[];
-  selected: string[];
-  color: "blue" | "green" | "amber";
-  onToggle: (value: string) => void;
-}) {
+function OptionButtons({ options, selected, color, onToggle }: { options: string[]; selected: string[]; color: "blue" | "green" | "amber"; onToggle: (value: string) => void }) {
   return (
     <div className="grid gap-3">
       {options.map((option) => {
         const active = selected.includes(option);
-
         const activeClass =
           color === "blue"
             ? "border-[#3478f6] bg-blue-50 text-[#1f5fc2]"
@@ -589,16 +490,7 @@ function OptionButtons({
             : "border-amber-400 bg-amber-50 text-amber-900";
 
         return (
-          <button
-            key={option}
-            type="button"
-            onClick={() => onToggle(option)}
-            className={`rounded-2xl border px-4 py-4 text-left text-sm font-semibold transition ${
-              active
-                ? activeClass
-                : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
-            }`}
-          >
+          <button key={option} type="button" onClick={() => onToggle(option)} className={`rounded-2xl border px-4 py-4 text-left text-sm font-semibold transition ${active ? activeClass : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"}`}>
             {active ? "✓ " : ""}
             {option}
           </button>
@@ -608,25 +500,11 @@ function OptionButtons({
   );
 }
 
-function NavButton({
-  text,
-  onClick,
-  disabled = false,
-}: {
-  text: string;
-  onClick: () => void;
-  disabled?: boolean;
-}) {
+function NavButton({ text, onClick, disabled = false }: { text: string; onClick: () => void; disabled?: boolean }) {
   return (
     <div className="mt-4 flex items-center justify-between gap-4">
       <p className="text-xs text-slate-500">No payment required</p>
-
-      <button
-        type="button"
-        onClick={onClick}
-        disabled={disabled}
-        className="rounded-xl bg-[#3478f6] px-6 py-3 font-semibold text-white hover:bg-[#2563eb] disabled:cursor-not-allowed disabled:opacity-40"
-      >
+      <button type="button" onClick={onClick} disabled={disabled} className="rounded-xl bg-[#3478f6] px-6 py-3 font-semibold text-white hover:bg-[#2563eb] disabled:cursor-not-allowed disabled:opacity-40">
         {text}
       </button>
     </div>
